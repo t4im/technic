@@ -15,20 +15,25 @@ local quarry_demand = 10000
 
 local function set_quarry_formspec(meta)
 	local radius = meta:get_int("size")
-	local formspec = "size[6,4.3]"..
-		"list[context;cache;0,1;4,3;]"..
+	local formspec = "size[6,5]"..
+		"list[context;cache;0,1;4,3.5;]"..
 		"item_image[4.8,0;1,1;technic:quarry]"..
 		"label[0,0.2;"..S("%s Quarry"):format("HV").."]"..
-		"field[4.3,3.5;2,1;size;"..S("Radius:")..";"..radius.."]"
+		"field[4.3,4.5;2,1;size;"..S("Radius:")..";"..radius.."]"
 	if meta:get_int("enabled") == 0 then
 		formspec = formspec.."button[4,1;2,1;enable;"..S("Disabled").."]"
 	else
 		formspec = formspec.."button[4,1;2,1;disable;"..S("Enabled").."]"
 	end
+	if meta:get_int("cobble") == 0 then
+		formspec = formspec.."button[4,3;2,1;cobenable;"..S("Destroy Cobble").."]"
+	else
+		formspec = formspec.."button[4,3;2,1;cobdisable;"..S("Keep Cobble").."]"
+	end
 	local diameter = radius*2 + 1
 	local nd = meta:get_int("dug")
 	local rel_y = quarry_dig_above_nodes - math.floor(nd / (diameter*diameter))
-	formspec = formspec.."label[0,4;"..minetest.formspec_escape(
+	formspec = formspec.."label[0,4.5;"..minetest.formspec_escape(
 			nd == 0 and S("Digging not started") or
 			(rel_y < -quarry_max_depth and S("Digging finished") or
 				(meta:get_int("purge_on") == 1 and S("Purging cache") or
@@ -66,6 +71,8 @@ local function quarry_receive_fields(pos, formname, fields, sender)
 	end
 	if fields.enable then meta:set_int("enabled", 1) end
 	if fields.disable then meta:set_int("enabled", 0) end
+	if fields.cobenable then meta:set_int("cobble", 1) end
+	if fields.cobdisable then meta:set_int("cobble", 0) end
 	if fields.restart then
 		meta:set_int("dug", 0)
 		meta:set_int("purge_on", 1)
@@ -170,11 +177,13 @@ local function quarry_run(pos, node)
 				minetest.remove_node(digpos)
 				local drops = minetest.get_node_drops(dignode.name, "")
 				for _, dropped_item in ipairs(drops) do
-					local left = inv:add_item("cache", dropped_item)
-					while not left:is_empty() do
-						meta:set_int("purge_on", 1)
-						quarry_handle_purge(pos)
-						left = inv:add_item("cache", left)
+					if dropped_item ~= "default:cobble" or meta:get_int("cobble") == 0 then
+						local left = inv:add_item("cache", dropped_item)
+						while not left:is_empty() do
+							meta:set_int("purge_on", 1)
+							quarry_handle_purge(pos)
+							left = inv:add_item("cache", left)
+						end
 					end
 				end
 				break
@@ -221,6 +230,7 @@ minetest.register_node("technic:quarry", {
 		local meta = minetest.get_meta(pos)
 		meta:set_string("infotext", S("%s Quarry"):format("HV"))
 		meta:set_int("size", 4)
+		meta:set_int("cobble", 1)
 		set_quarry_formspec(meta)
 		set_quarry_demand(meta)
 	end,
